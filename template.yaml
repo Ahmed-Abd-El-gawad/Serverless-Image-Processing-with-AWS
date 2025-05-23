@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  # ================
+  # 1. S3 Buckets
+  # ================
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-frontend-bucket 
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+
+  OriginalBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-original-bucket 
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false 
+        BlockPublicPolicy: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: ["PUT", "POST"]
+            AllowedOrigins: ["*"]
+
+  ProcessedBucket:
+    Type: AWS::S3::Bucket  
+
+  # ================
+  # 2. Bucket Policies
+  # ================
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
+
+  OriginalBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref OriginalBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${OriginalBucket}/*"
+
+  # ================
+  # 3. Lambda Function
+  # ================
+  ImageProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Layers:
+        - !Ref PillowLayer
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref OriginalBucket
+        - S3WritePolicy:
+            BucketName: !Ref ProcessedBucket
+        - DynamoDBCrudPolicy:
+            TableName: image-metadata
+        - AWSLambdaBasicExecutionRole
+        - AmazonRekognitionReadOnlyAccess
+        - Statement:
+            Effect: Allow
+            Action: sns:Publish
+            Resource: !Ref ImageProcessedTopic
+      Environment:
+        Variables:
+          PROCESSED_BUCKET: !Ref ProcessedBucket
+          SNS_TOPIC_ARN: !Ref ImageProcessedTopic
+      Events:
+        S3Trigger:
+          Type: S3
+          Properties:
+            Bucket: !Ref OriginalBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: .jpg
+
+  # ================
+  # 4. Supporting Resources
+  # ================
+  PillowLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: PillowLayer
+      ContentUri: layers/pillow
+      CompatibleRuntimes: [python3.9]
+
+  ImageMetadataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: image-metadata
+      AttributeDefinitions:
+        - AttributeName: ImageID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ImageID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  ImageProcessedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: image-processed-topic
+
+  SNSEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: your-email@example.com
+      TopicArn: !Ref ImageProcessedTopic
+
+Outputs:
+  FrontendURL:
+    Value: !GetAtt FrontendBucket.WebsiteURL
+  OriginalBucketName:
+    Value: !Ref OriginalBucket
