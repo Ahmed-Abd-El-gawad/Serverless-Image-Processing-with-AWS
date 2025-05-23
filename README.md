@@ -19,7 +19,7 @@ A serverless image processing pipeline using S3, Lambda, Rekognition, and Dynamo
 - **Infrastructure**: SAM, IAM, CloudWatch
 
 ## Architecture
-![Architecture](architecture.drawio)
+![Architecture](architecture.png)
 
 ## Workflow
 
