@@ -126,7 +126,7 @@ Resources:
     Type: AWS::SNS::Subscription
     Properties:
       Protocol: email
-      Endpoint: your-email@example.com
+      Endpoint: ahmed.abdelgawad.test@gmail.com
       TopicArn: !Ref ImageProcessedTopic
 
 Outputs:

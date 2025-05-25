@@ -49,8 +49,6 @@ A serverless image processing pipeline using S3, Lambda, Rekognition, and Dynamo
    cd aws-image-processor
    ```
 
-2. Edit your email in *`templat.yaml`*.
-
 2. Build and deploy:
     ```bash
     sam build
